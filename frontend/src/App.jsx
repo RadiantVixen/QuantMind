@@ -14,7 +14,7 @@ function App() {
         <div>
           <div className="logo">QUANTMIND</div>
           <p className="subtitle">AI-powered crypto intelligence</p>
-        </div>
+        </div> 
         <span className="muted">MVP · v1.0</span>
       </header>
 
