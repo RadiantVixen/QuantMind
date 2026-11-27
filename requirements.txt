@@ -3,4 +3,9 @@ ccxt
 python-dotenv
 scikit-learn
 joblib
-
+langgraph
+feedparser
+feedparser
+sentence-transformers
+chromadb
+langgraph-checkpoint-sqlite

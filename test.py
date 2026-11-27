@@ -1,29 +1,15 @@
-from intelligence.data.ingestion import ingest_market_data
-from intelligence.data.preprocessing import prepare_data
-from intelligence.features.feature_pipeline import build_features, FEATURE_COLUMNS
+from intelligence.agents.rag.ingestion import ingest_news
+from intelligence.agents.rag.vector_store import retrieve_articles
 
-df = ingest_market_data()
-df = prepare_data(df)
-df = build_features(df)
+count = ingest_news()
+print(f"Indexed {count} articles")
 
-print(df[FEATURE_COLUMNS].tail())
-print("\nFeature shape:", df[FEATURE_COLUMNS].shape)
-print("\nMissing values:\n", df[FEATURE_COLUMNS].isnull().sum())
-
-
-from intelligence.ml.backtesting import (
-    backtest,
-    calculate_performance,
+results = retrieve_articles(
+    "Bitcoin institutional adoption and market risks",
+    top_k=5,
 )
 
-predictions = model.predict(X_test)
-
-test_df = df.loc[X_test.index].copy()
-
-results = backtest(test_df, predictions)
-
-performance = calculate_performance(results)
-
-print("\nBACKTEST RESULTS")
-for metric, value in performance.items():
-    print(f"{metric}: {value:.4f}")
+for article in results:
+    print("\n", article["metadata"]["title"])
+    print("Similarity:", article["similarity"])
+    print("Link:", article["metadata"]["link"])
