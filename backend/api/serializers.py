@@ -29,3 +29,4 @@ class AnalysisSerializer(serializers.Serializer):
 class ApprovalSerializer(serializers.Serializer):
     thread_id = serializers.CharField()
     approved = serializers.BooleanField()
+

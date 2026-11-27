@@ -6,7 +6,7 @@ from .serializers import AnalysisSerializer
 from .services import run_analysis
 from .serializers import ApprovalSerializer
 from .services import resume_analysis
-
+from intelligence.data.ingestion import ingest_market_data
 
 class AnalysisView(APIView):
 
@@ -47,4 +47,37 @@ class ApprovalView(APIView):
             return Response(
                 {"error": "Unable to resume this analysis."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class MarketDataView(APIView):
+
+    def get(self, request):
+        symbol = request.query_params.get("symbol", "BTC/USDT")
+        timeframe = request.query_params.get("timeframe", "1h")
+
+        try:
+            df = ingest_market_data(
+                symbol=symbol,
+                timeframe=timeframe,
+                limit=100,
+            )
+
+            candles = df.to_dict("records")
+
+            for candle in candles:
+                candle["timestamp"] = candle["timestamp"].isoformat()
+                for key in ["open", "high", "low", "close", "volume"]:
+                    candle[key] = float(candle[key])
+
+            return Response({
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "candles": candles,
+            })
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

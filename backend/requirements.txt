@@ -1,0 +1,13 @@
+pandas
+ccxt
+python-dotenv
+scikit-learn
+joblib
+langgraph
+feedparser
+sentence-transformers
+chromadb
+langgraph-checkpoint-sqlite
+mcp[cli]
+django
+djangorestframework

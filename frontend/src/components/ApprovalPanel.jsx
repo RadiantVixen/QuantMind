@@ -1,55 +1,47 @@
 import { useState } from 'react'
-import api from '../api'
+import { submitApproval } from '../api'
+import { usd } from '../format'
 
 function ApprovalPanel({ result, onComplete }) {
-  const [loading, setLoading] = useState(false)
+  const [pending, setPending] = useState(null)
   const [error, setError] = useState('')
 
   if (!result?.approval_required) return null
+  const req = result.approval_request ?? {}
 
-  const handleApproval = async (approved) => {
-    setLoading(true)
+  const decide = async (approved) => {
+    setPending(approved ? 'approve' : 'reject')
     setError('')
-
     try {
-      const response = await api.post('/approval/', {
-        thread_id: result.thread_id,
-        approved,
-      })
-
-      onComplete(response.data)
+      onComplete(await submitApproval(result.thread_id, approved))
     } catch (err) {
-      setError(err.response?.data?.error || 'Approval failed.')
+      setError(err.message)
     } finally {
-      setLoading(false)
+      setPending(null)
     }
   }
 
   return (
-    <section>
-      <h2>Human Approval Required</h2>
-
-      <p>Proposed decision: {result.approval_request.proposed_decision}</p>
-      <p>Risk level: {result.approval_request.risk_level}</p>
-      <p>
-        Recommended position: $
-        {result.approval_request.recommended_position_value}
-      </p>
-      <p>
-        Estimated maximum loss: $
-        {result.approval_request.estimated_max_loss}
-      </p>
-
-      <button disabled={loading} onClick={() => handleApproval(true)}>
-        Approve
-      </button>
-
-      <button disabled={loading} onClick={() => handleApproval(false)}>
-        Reject
-      </button>
-
-      {loading && <p>Processing...</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+    <section className="card approval-card">
+      <div className="approval-text">
+        <div className="approval-title">
+          <span className="pulse" /> Human approval required
+        </div>
+        <p className="muted">
+          The agents propose <strong>{req.proposed_decision}</strong> with a{' '}
+          {usd(req.recommended_position_value)} position (max loss {usd(req.estimated_max_loss)}). Review
+          the analysis below before you approve.
+        </p>
+        {error && <p className="error-text">{error}</p>}
+      </div>
+      <div className="approval-actions">
+        <button className="btn btn-ghost" disabled={!!pending} onClick={() => decide(false)}>
+          {pending === 'reject' ? <span className="spinner" /> : 'Reject'}
+        </button>
+        <button className="btn btn-primary" disabled={!!pending} onClick={() => decide(true)}>
+          {pending === 'approve' ? <span className="spinner" /> : 'Approve'}
+        </button>
+      </div>
     </section>
   )
 }
