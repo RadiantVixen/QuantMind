@@ -3,6 +3,7 @@ import AnalysisForm from './components/AnalysisForm'
 import ApprovalPanel from './components/ApprovalPanel'
 import AnalysisResults from './components/AnalysisResults'
 import './index.css'
+import PredictionPanel from './components/PredictionPanel'
 
 function App() {
   const [result, setResult] = useState(null)
@@ -29,6 +30,7 @@ function App() {
       {result && (
         <>
           <ApprovalPanel result={result} onComplete={setResult} />
+          <PredictionPanel result={result} />
           <AnalysisResults result={result} />
         </>
       )}

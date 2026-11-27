@@ -9,3 +9,6 @@ feedparser
 sentence-transformers
 chromadb
 langgraph-checkpoint-sqlite
+mcp[cli]
+django
+djangorestframework

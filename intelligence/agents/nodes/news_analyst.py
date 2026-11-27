@@ -1,6 +1,6 @@
 from intelligence.agents.rag.ingestion import ingest_news
 from intelligence.agents.rag.vector_store import retrieve_articles
-
+from intelligence.agents.rag.sentiment import classify_sentiment
 
 def news_analyst(state: dict) -> dict:
 
@@ -18,6 +18,30 @@ def news_analyst(state: dict) -> dict:
     )
 
     articles = retrieve_articles(query, top_k=5)
+    
+    sentiment_scores = []
+
+    for article in articles:
+        text = f"{article.get('title', '')} {article.get('content', '')}"
+
+        sentiment = classify_sentiment(text)
+
+        article["sentiment"] = sentiment["sentiment"]
+        article["sentiment_score"] = sentiment["score"]
+
+        sentiment_scores.append(sentiment["score"])
+
+    average_score = (
+        sum(sentiment_scores) / len(sentiment_scores)
+        if sentiment_scores else 0
+    )
+
+    if average_score > 0:
+        overall_sentiment = "BULLISH"
+    elif average_score < 0:
+        overall_sentiment = "BEARISH"
+    else:
+        overall_sentiment = "NEUTRAL"
 
     # 3. Prepare evidence for the Decision Agent
     analysis = "\n".join(
@@ -27,6 +51,8 @@ def news_analyst(state: dict) -> dict:
     )
 
     return {
-        "news_analysis": analysis or "No relevant news retrieved.",
+        "news_analysis": analysis,
         "news_articles": articles,
+        "news_sentiment": overall_sentiment,
+        "news_sentiment_score": average_score,
     }

@@ -1,15 +1,13 @@
-from intelligence.agents.rag.ingestion import ingest_news
-from intelligence.agents.rag.vector_store import retrieve_articles
+from intelligence.agents.rag.sentiment import classify_sentiment
 
-count = ingest_news()
-print(f"Indexed {count} articles")
+examples = [
+    "Bitcoin surges as institutional adoption grows",
+    "Crypto market crashes after regulatory ban",
+    "Bitcoin price remains stable today",
+    "Bitcoin did not rally after the announcement",
+]
 
-results = retrieve_articles(
-    "Bitcoin institutional adoption and market risks",
-    top_k=5,
-)
-
-for article in results:
-    print("\n", article["metadata"]["title"])
-    print("Similarity:", article["similarity"])
-    print("Link:", article["metadata"]["link"])
+for text in examples:
+    print(text)
+    print(classify_sentiment(text))
+    print("-" * 50)

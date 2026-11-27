@@ -160,3 +160,37 @@ button:disabled {
     flex-direction: column;
   }
 }
+
+.prediction-header {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.prediction-header h1 {
+  font-size: 32px;
+  margin: 8px 0;
+}
+
+.probability-track {
+  height: 10px;
+  background: #26334a;
+  border-radius: 20px;
+  overflow: hidden;
+  margin: 10px 0 20px;
+}
+
+.probability-up,
+.probability-down {
+  height: 100%;
+  border-radius: 20px;
+}
+
+.probability-up {
+  background: #22c55e;
+}
+
+.probability-down {
+  background: #ef4444;
+}
