@@ -1,5 +1,6 @@
-ccxt
 pandas
+ccxt
 python-dotenv
-
+scikit-learn
+joblib
 
