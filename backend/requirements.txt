@@ -11,3 +11,4 @@ langgraph-checkpoint-sqlite
 mcp[cli]
 django
 djangorestframework
+django-cors-headers

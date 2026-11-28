@@ -1,9 +1,13 @@
-// Thin fetch wrapper around the Django API (proxied to :8000 by Vite).
+// Thin fetch wrapper around the Django API.
+// In dev/Docker, requests go to the relative /api path (proxied to the backend).
+// On GitHub Pages, set VITE_API_URL to the public backend origin,
+// e.g. https://quantmind-api.onrender.com
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
 
 async function request(path, options = {}) {
   let response
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(`${API_BASE}/api${path}`, {
       headers: { 'Content-Type': 'application/json' },
       ...options,
     })
