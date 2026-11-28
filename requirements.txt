@@ -12,3 +12,4 @@ langgraph-checkpoint-sqlite
 mcp[cli]
 django
 djangorestframework
+langchain-mcp-adapters
