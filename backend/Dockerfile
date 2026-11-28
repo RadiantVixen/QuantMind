@@ -14,4 +14,5 @@ COPY intelligence/ ./intelligence/
 
 EXPOSE 8000
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Create/upgrade the database tables (users, tokens, analysis runs) before starting.
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"]

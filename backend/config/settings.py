@@ -20,10 +20,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-*!=2oo50%9gnt3^mynscg_0sfbjg)g7j*)0jr&-f_(!($96&@9'
+import os
+
+# Set DJANGO_SECRET_KEY in production. The fallback is for local development only.
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY",
+    'django-insecure-*!=2oo50%9gnt3^mynscg_0sfbjg)g7j*)0jr&-f_(!($96&@9',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
 
 ALLOWED_HOSTS = ['*']
 
@@ -44,6 +50,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     "rest_framework",
+    "rest_framework.authtoken",
     "corsheaders",
     "api",
 ]
@@ -137,9 +144,24 @@ MAILERS = {
 }
 
 
+# Authentication: every API endpoint requires a token unless the view says otherwise.
+# Token auth (not session cookies) so the GitHub Pages frontend can call the API
+# from another domain without CSRF or third-party cookie problems.
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    # Slows down password guessing on the login/register endpoints.
+    "DEFAULT_THROTTLE_RATES": {
+        "auth": "10/minute",
+    },
+}
+
 # CORS: lets the GitHub Pages frontend call this API from another domain.
 # Comma-separated list, e.g. "https://radiantvixen.github.io"
-import os
 
 CORS_ALLOWED_ORIGINS = [
     origin.strip()

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AnalysisForm from './components/AnalysisForm'
 import PriceChart from './components/PriceChart'
 import DecisionCard from './components/DecisionCard'
 import ApprovalPanel from './components/ApprovalPanel'
 import AnalystPanels from './components/AnalystPanels'
-import { runAnalysis } from './api'
+import AuthScreen from './components/AuthScreen'
+import { getCurrentUser, getToken, logout, runAnalysis, setUnauthorizedHandler } from './api'
 
 const DEFAULT_PARAMS = {
   symbol: 'BTC/USDT',
@@ -45,6 +46,32 @@ function Pipeline({ loading, result }) {
 }
 
 function App() {
+  // undefined = still checking the saved token, null = signed out
+  const [user, setUser] = useState(getToken() ? undefined : null)
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => setUser(null))
+    if (getToken()) {
+      getCurrentUser()
+        .then(setUser)
+        .catch(() => setUser(null))
+    }
+  }, [])
+
+  if (user === undefined) {
+    return (
+      <div className="auth-page">
+        <span className="spinner lg" />
+      </div>
+    )
+  }
+
+  if (user === null) return <AuthScreen onAuthenticated={setUser} />
+
+  return <Dashboard user={user} onLogout={() => logout().catch(() => {}).finally(() => setUser(null))} />
+}
+
+function Dashboard({ user, onLogout }) {
   const [params, setParams] = useState(DEFAULT_PARAMS)
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -82,6 +109,14 @@ function App() {
           </div>
         </div>
         <AnalysisForm params={params} onChange={setParams} onSubmit={analyze} loading={loading} />
+        <div className="user-bar">
+          <span className="small">
+            Signed in as <strong>{user.username}</strong>
+          </span>
+          <button type="button" className="link-btn" onClick={onLogout}>
+            Sign out
+          </button>
+        </div>
         <p className="disclaimer">
           Model output is probabilistic and for research only. It is not financial advice.
         </p>

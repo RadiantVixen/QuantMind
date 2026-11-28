@@ -1,155 +1,147 @@
-# QuantMind
+<div align="center">
 
-**A multi-agent crypto market analysis system with a human in the loop.**
+# 🧠 QuantMind
 
-QuantMind looks at a crypto market (for example `BTC/USDT`) from four angles at once: a machine-learning forecast, technical indicators, risk metrics, and live news sentiment. It combines them into one decision (**BUY**, **HOLD**, or **AVOID**), sizes a position for your portfolio, and then **waits for a human to approve or reject** the proposal before anything is final.
+### A multi-agent AI system for crypto market analysis, with a human in the loop
 
-It's built with **LangGraph** (agent orchestration), **Django REST Framework** (API), and **React + Vite** (dashboard).
+Four specialised agents analyse a market in parallel. Their signals are merged into one risk-checked decision, and **nothing is final until a human approves it.**
 
-🔗 **Live frontend:** https://radiantvixen.github.io/QuantMind/
-_(needs a running backend to produce analyses; see [Deployment](#deployment))_
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-multi--agent-1C3C3C?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
+[![Django](https://img.shields.io/badge/Django_REST-API-092E20?logo=django&logoColor=white)](https://www.django-rest-framework.org/)
+[![React](https://img.shields.io/badge/React_19-Vite-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-ML-F7931E?logo=scikitlearn&logoColor=white)](https://scikit-learn.org/)
+[![ChromaDB](https://img.shields.io/badge/ChromaDB-RAG-FF6F61)](https://www.trychroma.com/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-> ⚠️ **Disclaimer:** QuantMind is an educational project. It is **not financial advice** and doesn't place real trades.
+**[Live demo](https://radiantvixen.github.io/QuantMind/)** · [Architecture](#-architecture) · [Tech stack](#-tech-stack) · [Engineering highlights](#-engineering-highlights) · [Run it locally](#-run-it-locally)
 
----
+</div>
 
-## Table of contents
-
-- [How it works](#how-it-works)
-- [The agents](#the-agents)
-- [Tech stack](#tech-stack)
-- [Project structure](#project-structure)
-- [Getting started](#getting-started)
-- [API reference](#api-reference)
-- [MCP server](#mcp-server)
-- [Deployment](#deployment)
+<!-- Add a screenshot of the dashboard here, e.g.:
+<p align="center"><img src="docs/dashboard.png" alt="QuantMind dashboard" width="900"></p>
+-->
 
 ---
 
-## How it works
+## 📌 Overview
 
-Each analysis runs as a **LangGraph state graph**. Four analyst agents run **in parallel**. A gate checks that they all succeeded, then a decision agent merges their signals and a portfolio manager sizes the trade. Finally, the graph **pauses** at an approval step until a human responds.
+Trading decisions usually mix very different kinds of evidence: what a model predicts, what the chart shows, how risky the market is, and what the news says. Most tools show these separately and leave you to combine them in your head.
+
+**QuantMind combines them automatically and explains its reasoning.**
+
+You pick a market (for example `BTC/USDT`) and describe your portfolio. Four agents then run **at the same time**:
+
+| | Agent | Question it answers |
+|---|---|---|
+| 📈 | **Market Analyst** | Where does a machine-learning model expect the price to go? |
+| 🔢 | **Quantitative Analyst** | What do the technical indicators say (trend, RSI, momentum, support and resistance)? |
+| 🛡️ | **Risk Analyst** | How volatile is this market, and how deep can it fall? |
+| 📰 | **News Analyst** | Is today's crypto news bullish or bearish? *(retrieval-augmented, from live RSS feeds)* |
+
+A **Decision Analyst** merges their signals into **BUY**, **HOLD**, or **AVOID**. A **Portfolio Manager** sizes the position to fit your risk budget. Then the workflow **pauses and waits for you to approve or reject** the proposal on the dashboard.
+
+> ⚠️ QuantMind is an educational and portfolio project. It doesn't place real trades and is not financial advice.
+
+---
+
+## ✨ Key features
+
+- **Parallel multi-agent workflow:** four analysts run at once in a LangGraph state graph, and their results meet at a single checkpoint.
+- **Human-in-the-loop approval:** the graph pauses mid-run, saves its state, and resumes only when the user decides, even if that's minutes later in a separate HTTP request.
+- **Retrieval-augmented news analysis:** articles are embedded with sentence-transformers, stored in ChromaDB, and searched by meaning to find what's relevant to the chosen asset.
+- **Machine-learning forecast:** a scikit-learn model trained on engineered features from historical candles, with evaluation and backtesting modules.
+- **Risk-first decisions:** a high-risk market always forces HOLD, however strong the other signals are.
+- **Position sizing:** risk-per-trade and stop-loss sizing, capped by a maximum portfolio exposure.
+- **Explainable output:** every decision comes with its score, how much the analysts agreed, and a plain-text breakdown.
+- **Secure multi-user API:** token authentication, password validation, rate-limited login, and approvals restricted to the user who started the analysis.
+- **AI-assistant integration:** an MCP server exposes the prediction, risk, and news tools to AI assistants such as Claude.
+- **Interactive dashboard:** a React dashboard with live price charts, pipeline status, and analyst panels.
+- **Containerised and automated:** Docker Compose runs the full stack, and GitHub Actions deploys the frontend to GitHub Pages.
+
+---
+
+## 🏗 Architecture
 
 ```mermaid
 flowchart TD
-    START([Request: symbol + timeframe + portfolio settings]) --> M & R & N & Q
+    U([👤 User · React dashboard]) -->|"POST /api/analysis/ (token auth)"| API[Django REST API]
+    API --> START
 
-    M[📈 Market Analyst<br/>ML price-direction model]
-    R[🛡️ Risk Analyst<br/>volatility & drawdown]
-    N[📰 News Analyst<br/>RAG + sentiment]
-    Q[🔢 Quantitative Analyst<br/>trend, RSI, support/resistance]
+    subgraph LG [LangGraph workflow · checkpointed to SQLite]
+        START((start)) --> M & Q & R & N
+        M[📈 Market Analyst<br/>scikit-learn model]
+        Q[🔢 Quantitative Analyst<br/>technical indicators]
+        R[🛡️ Risk Analyst<br/>volatility & drawdown]
+        N[📰 News Analyst<br/>RAG over ChromaDB]
+        M & Q & R & N --> G{Analysis gate<br/>did every agent succeed?}
+        G -- no --> X[Fail safely with a clear error]
+        G -- yes --> D[🧠 Decision Analyst<br/>weighted score + risk override]
+        D --> P[💼 Portfolio Manager<br/>position sizing]
+        P --> H[⏸ Human approval<br/>interrupt]
+    end
 
-    M & R & N & Q --> G{Analysis Gate<br/>did every analyst succeed?}
+    H -.->|proposal| U
+    U -.->|"POST /api/approval/ (approve / reject)"| H
 
-    G -- failed --> E[Analysis Error] --> END1([End])
-    G -- continue --> D[🧠 Decision Analyst<br/>weighted signal → BUY / HOLD / AVOID]
-    D --> P[💼 Portfolio Manager<br/>position sizing & exposure limits]
-    P --> A[🙋 Human Approval<br/>graph pauses here]
-    A -- approve / reject --> END2([Final result])
+    BIN[(Binance via ccxt)] --> M & Q & R
+    RSS[(CoinDesk / Cointelegraph RSS)] --> N
 ```
 
-Because the graph is **checkpointed to SQLite**, a paused analysis survives between requests. The API gives back a `thread_id`, and a later call to `/api/approval/` resumes that exact run.
+**Request lifecycle**
 
-### What happens during one analysis
-
-1. **Market data:** OHLCV candles are fetched from Binance through `ccxt`.
-2. **Features:** returns, moving averages, volatility, and volume changes are computed.
-3. **Parallel analysis:** the four analysts each add their findings to a shared state.
-4. **Decision:** signals are merged with fixed weights (see below). A high-risk market always forces a HOLD.
-5. **Sizing:** the portfolio manager turns the decision into a position size that respects your risk budget.
-6. **Approval:** the dashboard shows the proposal. You approve or reject it, and the graph finishes.
+1. The dashboard sends the market and portfolio settings to the Django API with the user's auth token.
+2. The API starts a LangGraph run with a unique `thread_id` and records which user owns it.
+3. The four analysts **fan out** in parallel, then **fan in** at the analysis gate.
+4. The decision and sizing nodes produce a proposal, and the graph **pauses** at the approval node. Its state is saved to SQLite.
+5. The user reviews the proposal and approves or rejects it. The API checks ownership and **resumes the same thread** from its checkpoint to finish the run.
 
 ---
 
-## The agents
+## 🛠 Tech stack
 
-| Agent | What it does | Output |
+| Area | Technologies | Why |
 |---|---|---|
-| **Market Analyst** | Runs a scikit-learn **logistic regression** model (`intelligence/ml/model.joblib`) on engineered features to predict the next move. | `prediction`, `probability_up`, `probability_down`, `latest_price` |
-| **Risk Analyst** | Measures annualized volatility and maximum drawdown, then classifies the market's risk. | `risk_level` (LOW / MEDIUM / HIGH), metrics |
-| **News Analyst** | Pulls RSS news (CoinDesk, Cointelegraph), embeds articles with `all-MiniLM-L6-v2`, stores them in **ChromaDB**, retrieves the most relevant ones, and scores their sentiment. | `news_sentiment`, `news_sentiment_score`, articles |
-| **Quantitative Analyst** | Classic technical analysis: trend, RSI, momentum, volatility regime, support and resistance. | `quant_trend`, `quant_rsi`, `quant_support`, … |
-| **Analysis Gate** | Each analyst is wrapped in a "safe" node that catches errors. The gate stops the run cleanly if any analyst failed. | `analysis_status` |
-| **Decision Analyst** | Merges the signals into one score in [-1, +1]. | `decision`, `decision_score`, `analyst_agreement`, `explanation` |
-| **Portfolio Manager** | Sizes the position from risk per trade and stop-loss distance, capped by maximum portfolio exposure. | `recommended_position_value`, `estimated_max_loss`, … |
-| **Approval** | Pauses the graph with a LangGraph `interrupt()` until a human answers. | `approval_status` (APPROVED / REJECTED) |
-
-### Decision formula
-
-```
-score = 0.50 × ML signal      (2 × probability_up − 1)
-      + 0.20 × trend signal   (bullish +1 / neutral 0 / bearish −1)
-      + 0.15 × RSI signal     (≥55 → +1, ≤45 → −1, else 0)
-      + 0.15 × news signal    (bullish +1 / neutral 0 / bearish −1)
-
-risk_level == HIGH → HOLD   (risk always overrides)
-score ≥ +0.25      → BUY
-score ≤ −0.25      → AVOID
-otherwise          → HOLD
-```
-
-### Position sizing
-
-```
-risk_budget    = portfolio_value × risk_per_trade_pct
-position_value = risk_budget ÷ stop_loss_pct
-               → capped by the remaining room under max_exposure_pct
-```
+| **Agent orchestration** | LangGraph, SQLite checkpointer | It models the workflow as an explicit graph with parallel branches, conditional routing, and built-in pause/resume for human approval. |
+| **Machine learning** | scikit-learn, pandas, joblib | A standardised logistic-regression pipeline with balanced classes. It's fast, easy to interpret, and a strong baseline for price direction. |
+| **Feature engineering** | pandas | Returns, moving-average ratios, rolling volatility, volume change, and RSI. |
+| **RAG and NLP** | sentence-transformers (`all-MiniLM-L6-v2`), ChromaDB, feedparser | Search by meaning finds relevant articles even when the wording differs from the query, and everything runs locally without paid APIs. |
+| **Market data** | ccxt (Binance) | One unified exchange API, so other exchanges can be added later. |
+| **Backend API** | Django, Django REST Framework, django-cors-headers | Mature authentication, validation, admin panel, and ORM. |
+| **Authentication** | DRF token auth, Django password validators, throttling | Token headers work across domains: the frontend is on GitHub Pages, and the API is hosted separately. |
+| **Frontend** | React 19, Vite, Recharts | A fast, component-based dashboard with interactive charts. |
+| **AI integration** | Model Context Protocol (MCP) | Lets AI assistants call QuantMind's tools directly. |
+| **DevOps** | Docker, Docker Compose, Nginx, GitHub Actions, GitHub Pages | One command runs the whole stack locally, and the frontend deploys automatically on push. |
 
 ---
 
-## Tech stack
+## 💡 Engineering highlights
 
-| Layer | Technologies |
-|---|---|
-| Agent orchestration | LangGraph, LangGraph SQLite checkpointer |
-| Machine learning | scikit-learn, pandas, joblib |
-| Market data | ccxt (Binance) |
-| News RAG | feedparser, sentence-transformers, ChromaDB |
-| API | Django, Django REST Framework, django-cors-headers |
-| Frontend | React 19, Vite, Recharts |
-| Tooling | Docker, Docker Compose, Nginx, GitHub Actions, MCP |
+These are the design decisions I'm most interested in discussing:
 
----
+**1. Fan-out and fan-in with fault isolation.**
+Each analyst is wrapped in a "safe" node that catches its own errors and records them in the shared state instead of crashing the graph. A gate node then waits for all four analysts and routes conditionally: it continues only if the essential signals are present, and otherwise it ends with a clear error message.
 
-## Project structure
+**2. Human approval that survives across HTTP requests.**
+LangGraph's `interrupt()` pauses the graph at the approval node, and the SQLite checkpointer persists its state under a `thread_id`. A later `/api/approval/` request resumes the *same* run with `Command(resume=...)`, so no work is repeated and the decision can't change between review and approval.
 
-```
-QuantMind/
-├── backend/                  # Django REST API
-│   ├── api/                  # views, serializers, services (runs the graph)
-│   ├── config/               # Django settings and URLs
-│   └── Dockerfile
-├── frontend/                 # React + Vite dashboard
-│   ├── src/
-│   │   ├── components/       # AnalysisForm, AnalystPanels, DecisionCard,
-│   │   │                     # PriceChart, ApprovalPanel
-│   │   ├── api.js            # API client
-│   │   └── App.jsx
-│   ├── nginx.conf            # serves the build and proxies /api in Docker
-│   └── Dockerfile
-├── intelligence/             # The "brain"
-│   ├── agents/
-│   │   ├── graph.py          # LangGraph workflow definition
-│   │   ├── state.py          # shared state schema
-│   │   ├── nodes/            # one file per agent
-│   │   └── rag/              # news ingestion, embeddings, vector store, sentiment
-│   ├── data/                 # market data ingestion (Binance provider)
-│   ├── features/             # technical indicators and feature pipeline
-│   ├── ml/                   # dataset, training, evaluation, backtesting, model
-│   └── mcp/                  # MCP server that exposes tools to AI assistants
-├── run_quantmind.py          # run one analysis from the command line
-├── stream_quantmind.py       # stream graph steps from the command line
-├── human_approval.py         # CLI demo of the approval flow
-├── docker-compose.yml
-└── .github/workflows/        # GitHub Pages deployment
-```
+**3. Risk as a hard constraint, not just another signal.**
+The decision score is a weighted blend (50% ML, 20% trend, 15% RSI, 15% news), but a HIGH risk level overrides the blend and forces HOLD. Position sizing is bounded both by the risk budget and by the remaining room under the exposure limit.
+
+**4. Authorisation, not just authentication.**
+Every analysis is stored as an `AnalysisRun` linked to its owner. The approval endpoint returns **404** for another user's thread, so it doesn't even reveal that the thread exists, and **409** if the analysis was already reviewed. This prevents both cross-user tampering and double approvals.
+
+**5. Built for split hosting.**
+The frontend reads its API URL at build time and uses header-based tokens rather than cookies. That lets it run as a static site on GitHub Pages while the Python backend runs anywhere that supports Docker.
+
+**6. Tested where it matters.**
+The API tests cover registration, login, logout, unauthenticated access, and approval ownership. The agent graph is mocked in these tests, so they're fast and don't call external services.
 
 ---
 
-## Getting started
+## 🚀 Run it locally
 
-### Option 1: Docker (recommended)
+**With Docker (one command):**
 
 ```bash
 git clone https://github.com/RadiantVixen/QuantMind.git
@@ -157,52 +149,83 @@ cd QuantMind
 docker compose up --build
 ```
 
-- Dashboard: http://localhost:3000
-- API: http://localhost:8000/api/
+Open **http://localhost:3000**, create an account, and run your first analysis.
 
-### Option 2: Run locally
+<details>
+<summary><b>Without Docker</b></summary>
 
-**Requirements:** Python 3.11+, Node.js 22+
-
-**1. Backend**
+Requires Python 3.11+ and Node.js 22+.
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
+# Backend
+python -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt
-
 cd backend
 python manage.py migrate
-python manage.py runserver           # http://127.0.0.1:8000
+python manage.py runserver            # http://127.0.0.1:8000
 ```
 
-**2. Frontend** (in a second terminal)
-
 ```bash
+# Frontend (second terminal)
 cd frontend
 npm install
-npm run dev                          # http://localhost:5173
+npm run dev                           # http://localhost:5173
 ```
 
-The Vite dev server forwards `/api` to `http://127.0.0.1:8000`. To use a different backend, set `API_URL`.
-
-**3. Command line only (no UI)**
-
 ```bash
+# Tests
+cd backend && python manage.py test api
+
+# One analysis from the command line, no UI
 python run_quantmind.py
 ```
 
-> The first run downloads the sentence-transformers embedding model, so it takes a little longer.
+The first run downloads the embedding model, so it takes a little longer.
+
+</details>
 
 ---
 
-## API reference
+## 📁 Project structure
 
-Base URL: `/api`
+```
+QuantMind/
+├── intelligence/            # The AI core
+│   ├── agents/
+│   │   ├── graph.py         # LangGraph workflow (parallel agents → gate → decision → approval)
+│   │   ├── state.py         # shared typed state
+│   │   ├── nodes/           # one module per agent
+│   │   └── rag/             # news ingestion, embeddings, vector store, sentiment
+│   ├── data/                # market data ingestion (Binance via ccxt)
+│   ├── features/            # technical indicators and feature pipeline
+│   ├── ml/                  # dataset, training, evaluation, backtesting
+│   └── mcp/                 # MCP server for AI assistants
+├── backend/                 # Django REST API (auth, analysis, approval, market data)
+├── frontend/                # React + Vite dashboard
+├── docker-compose.yml
+└── .github/workflows/       # automatic GitHub Pages deployment
+```
 
-### `POST /api/analysis/`
+---
 
-Starts a new analysis. Every field is optional.
+## 📚 Reference
+
+<details>
+<summary><b>API endpoints</b></summary>
+
+Every endpoint except register and login needs the header `Authorization: Token <token>`.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/auth/register/` | Create an account → `{ token, user }` |
+| `POST` | `/api/auth/login/` | Sign in → `{ token, user }` |
+| `POST` | `/api/auth/logout/` | Invalidate the token |
+| `GET` | `/api/auth/me/` | Current user |
+| `POST` | `/api/analysis/` | Run the agent workflow. Returns the analysis and a `thread_id` |
+| `POST` | `/api/approval/` | `{ thread_id, approved }` resumes the paused run |
+| `GET` | `/api/market-data/?symbol=BTC/USDT&timeframe=1h` | Last 100 candles for the chart |
+
+Example analysis request (every field is optional):
 
 ```json
 {
@@ -216,62 +239,71 @@ Starts a new analysis. Every field is optional.
 }
 ```
 
-`timeframe` must be one of `15m`, `1h`, `4h`, `1d`.
+</details>
 
-The response contains all the analyst outputs, the decision, position sizing, a `thread_id`, and `"approval_required": true`.
+<details>
+<summary><b>Decision and sizing formulas</b></summary>
 
-### `POST /api/approval/`
+```
+score = 0.50 × ML signal      (2 × probability_up − 1)
+      + 0.20 × trend signal   (bullish +1 / neutral 0 / bearish −1)
+      + 0.15 × RSI signal     (≥55 → +1, ≤45 → −1, else 0)
+      + 0.15 × news signal    (bullish +1 / neutral 0 / bearish −1)
 
-Resumes a paused analysis with the human's decision.
+risk_level == HIGH → HOLD        (risk always overrides)
+score ≥ +0.25      → BUY
+score ≤ −0.25      → AVOID
+otherwise          → HOLD
 
-```json
-{ "thread_id": "<from the analysis response>", "approved": true }
+risk_budget    = portfolio_value × risk_per_trade_pct
+position_value = risk_budget ÷ stop_loss_pct, capped by remaining exposure room
 ```
 
-### `GET /api/market-data/?symbol=BTC/USDT&timeframe=1h`
+</details>
 
-Returns the last 100 OHLCV candles for the price chart.
+<details>
+<summary><b>MCP server</b></summary>
 
----
-
-## MCP server
-
-`intelligence/mcp/server.py` exposes QuantMind's capabilities as **Model Context Protocol** tools, so an AI assistant can call them directly:
-
-- `get_market_prediction(symbol, timeframe)`
-- `get_risk_assessment(symbol, timeframe)`
-- `search_crypto_news(query, top_k)`
+`intelligence/mcp/server.py` exposes three tools to AI assistants: `get_market_prediction`, `get_risk_assessment`, and `search_crypto_news`.
 
 ```bash
 python -m intelligence.mcp.server
 ```
 
----
+</details>
 
-## Deployment
+<details>
+<summary><b>Deployment</b></summary>
 
-### Frontend → GitHub Pages
+**Frontend (GitHub Pages):** deployed automatically by `.github/workflows/deploy-frontend.yml` on every push to `main` that changes `frontend/`. To enable it, set Settings → Pages → Source to **GitHub Actions**, then add a repository variable `VITE_API_URL` with the backend's public URL.
 
-The dashboard is deployed automatically by [`.github/workflows/deploy-frontend.yml`](.github/workflows/deploy-frontend.yml) on every push to `main` that changes `frontend/`.
+**Backend:** any Docker host works (Render, Railway, Fly.io, or a VPS). Build `backend/Dockerfile` from the repository root, and set these variables:
 
-One-time setup:
+| Variable | Purpose |
+|---|---|
+| `DJANGO_SECRET_KEY` | Long random secret, required in production |
+| `DJANGO_DEBUG` | `false` in production |
+| `CORS_ALLOWED_ORIGINS` | e.g. `https://radiantvixen.github.io` |
 
-1. On GitHub, open **Settings → Pages** and set **Source** to **GitHub Actions**.
-2. In **Settings → Secrets and variables → Actions → Variables**, add `VITE_API_URL` and set it to the public URL of your backend (for example `https://quantmind-api.onrender.com`).
-3. Push to `main`, or run the workflow by hand from the **Actions** tab.
+Serve the backend over HTTPS.
 
-### Backend
-
-GitHub Pages only serves static files, so the Django + LangGraph backend needs its own host. Any service that runs Docker works, such as Render, Railway, Fly.io, or a VPS. Use `backend/Dockerfile` with the repository root as the build context.
-
-Set this environment variable on the backend so the browser accepts its responses on the Pages site:
-
-```
-CORS_ALLOWED_ORIGINS=https://radiantvixen.github.io
-```
+</details>
 
 ---
 
-## License
+## 🗺 Roadmap
 
-No license has been chosen yet. Until one is added, all rights are reserved by the author.
+- [ ] Host the backend publicly so the live demo runs end to end
+- [ ] Analysis history page for each user (the data is already stored in `AnalysisRun`)
+- [ ] Backtesting results and model metrics on the dashboard
+- [ ] LLM-written explanations alongside the rule-based breakdown
+- [ ] Run the backend test suite in CI on every pull request
+
+---
+
+<div align="center">
+
+Built by **[RadiantVixen](https://github.com/RadiantVixen)**.
+If you're a recruiter or an engineer and want to talk about this project, feel free to reach out through my GitHub profile.
+
+</div>
